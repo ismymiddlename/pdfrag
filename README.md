@@ -27,6 +27,17 @@ The embedding model `intfloat/multilingual-e5-small` downloads on first use and
 is cached by Hugging Face. The optional answer model
 `LiquidAI/LFM2-1.2B-RAG` is downloaded on the first `/ask` request.
 
+## Docker
+
+```bash
+docker build -t pdf-rag .
+docker run --rm -p 8000:8000 -v hf-cache:/home/app/.cache/huggingface pdf-rag
+```
+
+The container serves the API and UI on port 8000. The named volume keeps the
+downloaded models between runs; without it they are downloaded again. The image
+runs on CPU and starts a single process, because the index is held in memory.
+
 ## API
 
 ### Upload and process: `POST /documents`

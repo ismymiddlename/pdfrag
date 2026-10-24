@@ -2,8 +2,10 @@ import pytest
 from fastapi import HTTPException, UploadFile
 from fastapi.testclient import TestClient
 
+import answer as answer_module
 import app as app_module
-from app import _hard_split, _strip_running_headers, app, extract_chunks
+from app import app
+from ingest import _hard_split, _strip_running_headers, extract_chunks
 
 
 def _escape(text: str) -> bytes:
@@ -164,7 +166,7 @@ def test_ask_returns_answer_with_sources(
     client: TestClient, document: dict, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setattr(
-        app_module,
+        answer_module,
         "_generate_answer",
         lambda query, hits: "Die Gewährleistung beträgt 24 Monate (Seite 1).",
     )
@@ -226,7 +228,7 @@ def test_ui_ask_returns_answer(
     client: TestClient, document: dict, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setattr(
-        app_module, "_generate_answer", lambda query, hits: "24 Monate (p. 1)."
+        answer_module, "_generate_answer", lambda query, hits: "24 Monate (p. 1)."
     )
     response = client.post(
         "/ui/query", data={"query": "Wie lange gilt die Gewährleistung?", "mode": "ask"}
