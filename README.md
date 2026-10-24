@@ -117,6 +117,7 @@ network requests.
 ## Tests
 
 ```bash
+source .venv/bin/activate
 pytest
 ```
 
