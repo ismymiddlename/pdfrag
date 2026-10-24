@@ -218,11 +218,13 @@ class Index:
         self, query_embedding: np.ndarray, top_k: int, document_id: str | None
     ) -> list[tuple[IndexedDocument, Chunk, float]]:
         with self.lock:
-            documents = (
-                [self.documents[document_id]]
-                if document_id is not None
-                else list(self.documents.values())
-            )
+            if document_id is not None:
+                # The document can be removed between the caller's existence
+                # check and this lookup; a missing one yields no hits.
+                document = self.documents.get(document_id)
+                documents = [document] if document is not None else []
+            else:
+                documents = list(self.documents.values())
 
         hits: list[tuple[IndexedDocument, Chunk, float]] = []
         for document in documents:
