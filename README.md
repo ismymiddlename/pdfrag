@@ -8,23 +8,13 @@ Upload and search are the core service. Question answering and the browser UI
 are optional layers built on the same retrieval pipeline; the core does not
 depend on them.
 
-## Project layout
-
-```
-app.py              core API, PDF extraction, chunking, embeddings, search,
-                    optional answers
-ui/                 browser UI: index.html, styles.css, vendored htmx
-tests/test_app.py   end-to-end and unit tests
-requirements.txt    pinned dependencies
-```
-
 ## Setup
 
-Python 3.12 and about 5 GB of free disk space for the embedding model and
-PyTorch.
+Python 3.12 or newer (the pinned NumPy 2.5 release requires it) and about 5 GB
+of free disk space for the embedding model and PyTorch.
 
 ```bash
-python3.12 -m venv .venv
+python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
 uvicorn app:app --reload
