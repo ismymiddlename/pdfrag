@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>PDF RAG</title>
+  <link rel="stylesheet" href="/static/styles.css?v=3">
+  <script src="/static/htmx.min.js"></script>
+  <script>
+    // htmx ignores error responses by default. The server returns error text as
+    // HTML, so let it swap into the target like any other response.
+    document.addEventListener("htmx:beforeSwap", (event) => {
+      if (event.detail.xhr.status >= 400) {
+        event.detail.shouldSwap = true;
+        event.detail.isError = false;
+      }
+    });
+
+    let lastCount = null;
+    let wasReady = false;
+
+    function syncState() {
+      const marker = document.querySelector("#documents [data-count]");
+      const count = marker === null ? "0" : marker.dataset.count;
+      const hasDocuments = count !== "0";
+      const results = document.getElementById("results");
+
+      // Any change to the document list invalidates the passages shown for the
+      // previous question.
+      if (lastCount !== null && lastCount !== count) {
+        results.replaceChildren();
+      }
+      lastCount = count;
+
+      document.getElementById("empty").hidden = hasDocuments;
+      document.getElementById("query-pane").hidden = !hasDocuments;
+      if (hasDocuments && !wasReady) {
+        document.querySelector("#query input[name=query]").focus();
+      }
+      wasReady = hasDocuments;
+    }
+
+    document.addEventListener("DOMContentLoaded", () => {
+      const form = document.getElementById("upload-form");
+      const input = form.querySelector("input[type=file]");
+      const list = document.getElementById("selected-files");
+      const submit = form.querySelector("button[type=submit]");
+
+      const renderFiles = () => {
+        list.replaceChildren(
+          ...Array.from(input.files).map((file) => {
+            const item = document.createElement("li");
+            item.textContent = file.name;
+            return item;
+          })
+        );
+        submit.disabled = input.files.length === 0;
+      };
+
+      input.addEventListener("change", renderFiles);
+      form.addEventListener("htmx:afterRequest", (event) => {
+        const status = event.detail.xhr.status;
+        if (status >= 200 && status < 300) {
+          form.reset();
+          renderFiles();
+        }
+      });
+
+      const queryForm = document.getElementById("query");
+      queryForm.addEventListener("click", (event) => {
+        const button = event.target.closest("button[data-mode]");
+        if (button) {
+          queryForm.querySelector("input[name=mode]").value = button.dataset.mode;
+        }
+      });
+
+      renderFiles();
+    });
+
+    document.addEventListener("htmx:afterSwap", syncState);
+  </script>
+</head>
+<body>
+  <header>
+    <h1>PDF RAG</h1>
+    <p class="muted">Upload PDFs, then search or ask questions about them.</p>
+  </header>
+
+  <main class="panes">
+    <aside class="library">
+      <h2>Documents</h2>
+      <form id="upload-form" hx-post="/ui/upload" hx-target="#upload-status"
+            hx-swap="innerHTML" hx-encoding="multipart/form-data"
+            hx-indicator="#upload-spinner" hx-disabled-elt="find button">
+        <input id="file-input" type="file" name="files" accept="application/pdf"
+               multiple required aria-label="PDF files">
+        <ul id="selected-files" class="file-list"></ul>
+        <button type="submit" disabled>Upload</button>
+        <span id="upload-spinner" class="spinner">indexing…</span>
+      </form>
+      <div id="upload-status" aria-live="polite"></div>
+      <div id="documents" hx-get="/ui/documents" hx-trigger="load"></div>
+    </aside>
+
+    <section class="workspace">
+      <p id="empty" class="empty">
+        No documents yet. Upload a PDF to get started.
+      </p>
+      <div id="query-pane" hidden>
+        <form id="query" hx-post="/ui/query" hx-target="#results"
+              hx-swap="innerHTML" hx-indicator="#query-spinner"
+              hx-disabled-elt="find button">
+          <input type="hidden" name="mode" value="ask">
+          <input type="search" name="query" required aria-label="Question"
+                 placeholder="Ask a question about the documents…">
+          <div class="controls">
+            <button type="submit" data-mode="ask" title="Get a written answer">
+              Ask
+            </button>
+            <button type="submit" data-mode="search" title="List matching passages">
+              Search
+            </button>
+            <span id="query-spinner" class="spinner">working…</span>
+          </div>
+        </form>
+        <div id="results" aria-live="polite"></div>
+      </div>
+    </section>
+  </main>
+</body>
+</html>
