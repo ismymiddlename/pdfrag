@@ -188,7 +188,21 @@ def test_ui_index_is_served(client: TestClient) -> None:
     assert response.status_code == 200
     assert "PDF RAG" in response.text
     assert "Upload a PDF to get started" in response.text
+    assert 'name="mode" value="search"' in response.text
+    assert "Search returns matching passages" in response.text
+    assert "downloads about 2.4 GB" in response.text
     assert response.headers["cache-control"] == "no-store"
+
+
+def test_health_reports_models_and_index(client: TestClient, document: dict) -> None:
+    response = client.get("/health")
+    assert response.status_code == 200
+    body = response.json()
+    assert body["status"] == "ok"
+    assert body["embedding_model"] == "intfloat/multilingual-e5-small"
+    assert body["ask_model"] == "LiquidAI/LFM2-1.2B-RAG"
+    assert body["ask_model_loaded"] is False
+    assert body["document_count"] >= 1
 
 
 def test_ui_delete_removes_document(client: TestClient) -> None:
@@ -357,3 +371,22 @@ def test_hard_split_avoids_tiny_tail() -> None:
     assert "".join(parts) == "x" * 1001
     assert max(map(len, parts)) <= 1000
     assert min(map(len, parts)) >= 500
+
+
+def test_answer_model_warm_up_is_idempotent(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    loads: list[int] = []
+
+    def fake_load() -> tuple[str, str]:
+        loads.append(1)
+        return ("tokenizer", "model")
+
+    monkeypatch.setattr(answer_module, "_llm", None)
+    monkeypatch.setattr(answer_module, "_load_llm", fake_load)
+
+    answer_module.warm_up()
+    answer_module.warm_up()
+
+    assert len(loads) == 1
+    assert answer_module.is_loaded() is True

@@ -18,7 +18,13 @@ ASK_MODEL_ID = "LiquidAI/LFM2-1.2B-RAG"
 ASK_MAX_NEW_TOKENS = 250
 
 _llm: tuple[AutoTokenizer, AutoModelForCausalLM] | None = None
-llm_lock = threading.Lock()
+llm_load_lock = threading.Lock()
+llm_generate_lock = threading.Lock()
+
+
+def is_loaded() -> bool:
+    # A status hint for the UI; no lock, so it cannot block a running load.
+    return _llm is not None
 
 
 def _load_llm() -> tuple[AutoTokenizer, AutoModelForCausalLM]:
@@ -33,10 +39,27 @@ def _load_llm() -> tuple[AutoTokenizer, AutoModelForCausalLM]:
     return tokenizer, model.to(device).eval()
 
 
+def _get_llm() -> tuple[AutoTokenizer, AutoModelForCausalLM]:
+    global _llm
+    with llm_load_lock:
+        if _llm is None:
+            _llm = _load_llm()
+        return _llm
+
+
+def warm_up() -> None:
+    """Load the answer model ahead of the first question."""
+    try:
+        _get_llm()
+    except Exception:
+        # A failed background load must not stop the server; a later ask
+        # retries and reports the error.
+        logger.exception("answer model warm-up failed")
+
+
 def _generate_answer(
     query: str, hits: list[tuple[IndexedDocument, Chunk, float]]
 ) -> str:
-    global _llm
     context = "\n\n".join(f"[page {chunk.page}]\n{chunk.text}" for _, chunk, _ in hits)
     messages = [
         {
@@ -55,10 +78,8 @@ def _generate_answer(
             ),
         },
     ]
-    with llm_lock:
-        if _llm is None:
-            _llm = _load_llm()
-        tokenizer, model = _llm
+    tokenizer, model = _get_llm()
+    with llm_generate_lock:
         inputs = tokenizer.apply_chat_template(
             messages,
             add_generation_prompt=True,

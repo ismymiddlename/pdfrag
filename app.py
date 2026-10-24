@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import logging
+import os
+import threading
 import time
 import uuid
 from contextlib import asynccontextmanager
@@ -13,7 +15,7 @@ from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 
-from answer import ASK_MODEL_ID, answer_question
+from answer import ASK_MODEL_ID, answer_question, is_loaded, warm_up
 from ingest import extract_chunks
 from retrieval import (
     DOCUMENT_PREFIX,
@@ -52,6 +54,10 @@ UI_DIR = Path(__file__).parent / "ui"
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     load_model()
+    if os.environ.get("PRELOAD_ANSWER_MODEL", "1") != "0":
+        threading.Thread(
+            target=warm_up, name="answer-model-warmup", daemon=True
+        ).start()
     yield
 
 
@@ -114,6 +120,7 @@ def health() -> HealthResponse:
         status="ok",
         embedding_model=MODEL_ID,
         ask_model=ASK_MODEL_ID,
+        ask_model_loaded=is_loaded(),
         document_count=index.count(),
     )
 

@@ -49,6 +49,7 @@ class HealthResponse(BaseModel):
     status: str
     embedding_model: str
     ask_model: str
+    ask_model_loaded: bool
     document_count: int
 
 

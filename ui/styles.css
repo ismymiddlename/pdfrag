@@ -147,6 +147,11 @@ button {
   margin-top: 8px;
 }
 
+.hint {
+  margin: 8px 0 0;
+  font-size: 0.875rem;
+}
+
 #results {
   margin-top: 24px;
 }

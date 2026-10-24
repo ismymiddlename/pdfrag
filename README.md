@@ -24,8 +24,10 @@ The service listens on <http://127.0.0.1:8000>. OpenAPI documentation is
 available at <http://127.0.0.1:8000/docs>.
 
 The embedding model `intfloat/multilingual-e5-small` downloads on first use and
-is cached by Hugging Face. The optional answer model
-`LiquidAI/LFM2-1.2B-RAG` is downloaded on the first `/ask` request.
+is cached by Hugging Face. The optional answer model `LiquidAI/LFM2-1.2B-RAG`
+(about 2.4 GB) is downloaded in the background at startup. Set
+`PRELOAD_ANSWER_MODEL=0` to skip the preload; it then loads on the first
+`/ask`.
 
 ## Docker
 
@@ -35,8 +37,10 @@ docker run --rm -p 8000:8000 -v hf-cache:/home/app/.cache/huggingface pdf-rag
 ```
 
 The container serves the API and UI on port 8000. The named volume keeps the
-downloaded models between runs; without it they are downloaded again. The image
-runs on CPU and starts a single process, because the index is held in memory.
+downloaded models between runs; without it they are downloaded again at
+startup. The answer-model preload runs in the background; set
+`-e PRELOAD_ANSWER_MODEL=0` to skip it. The image runs on CPU and starts a
+single process, because the index is held in memory.
 
 ## API
 
@@ -96,7 +100,7 @@ curl -X POST http://127.0.0.1:8000/ask \
 ### Other endpoints
 
 - `GET /documents`: indexed documents with page and chunk counts.
-- `GET /health`: model names and document count.
+- `GET /health`: model names, answer-model load state, and document count.
 
 ## Browser UI (optional)
 
@@ -104,7 +108,9 @@ curl -X POST http://127.0.0.1:8000/ask \
 functions. The left pane uploads PDFs and lists the indexed documents, each with
 a Remove button. The right pane searches or asks questions. Before the first
 document is indexed, the query controls are hidden and an upload prompt is
-displayed.
+displayed. Search is the default action. The answer model loads in the
+background at startup; if it is still loading when Ask is used, the page shows
+a notice while it downloads.
 
 The UI posts to `/ui/upload`, `/ui/query`, and `/ui/documents/{id}`, which
 return HTML fragments. htmx is vendored in `ui/`; the page makes no third-party

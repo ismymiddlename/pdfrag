@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>PDF RAG</title>
-  <link rel="stylesheet" href="/static/styles.css?v=3">
+  <link rel="stylesheet" href="/static/styles.css?v=5">
   <script src="/static/htmx.min.js"></script>
   <script>
     // htmx ignores error responses by default. The server returns error text as
@@ -67,10 +67,38 @@
       });
 
       const queryForm = document.getElementById("query");
+      const queryNote = document.getElementById("query-note");
+      let queryPending = 0;
+
       queryForm.addEventListener("click", (event) => {
         const button = event.target.closest("button[data-mode]");
         if (button) {
           queryForm.querySelector("input[name=mode]").value = button.dataset.mode;
+        }
+      });
+
+      queryForm.addEventListener("htmx:beforeRequest", async () => {
+        queryPending += 1;
+        if (queryForm.querySelector("input[name=mode]").value !== "ask") {
+          return;
+        }
+        try {
+          const health = await (await fetch("/health")).json();
+          if (queryPending > 0 && !health.ask_model_loaded) {
+            queryNote.hidden = false;
+          }
+        } catch {
+          // The check failed; warn anyway so a long download is not silent.
+          if (queryPending > 0) {
+            queryNote.hidden = false;
+          }
+        }
+      });
+
+      queryForm.addEventListener("htmx:afterRequest", () => {
+        queryPending -= 1;
+        if (queryPending === 0) {
+          queryNote.hidden = true;
         }
       });
 
@@ -110,19 +138,26 @@
         <form id="query" hx-post="/ui/query" hx-target="#results"
               hx-swap="innerHTML" hx-indicator="#query-spinner"
               hx-disabled-elt="find button">
-          <input type="hidden" name="mode" value="ask">
+          <input type="hidden" name="mode" value="search">
           <input type="search" name="query" required aria-label="Question"
-                 placeholder="Ask a question about the documents…">
+                 placeholder="Search or ask about the documents…">
           <div class="controls">
-            <button type="submit" data-mode="ask" title="Get a written answer">
-              Ask
-            </button>
             <button type="submit" data-mode="search" title="List matching passages">
               Search
+            </button>
+            <button type="submit" data-mode="ask" title="Get a written answer">
+              Ask
             </button>
             <span id="query-spinner" class="spinner">working…</span>
           </div>
         </form>
+        <p class="muted hint">
+          Search returns matching passages. Ask writes an answer from them.
+        </p>
+        <p id="query-note" class="muted hint" role="status" hidden>
+          Loading the answer model. On a first run this downloads about 2.4 GB
+          and can take several minutes.
+        </p>
         <div id="results" aria-live="polite"></div>
       </div>
     </section>
