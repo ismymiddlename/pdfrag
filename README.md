@@ -147,3 +147,32 @@ with a stub, so the answer model is not required.
 - Generation with the 1.2B model takes several seconds on CPU or Apple MPS.
   The model is loaded once and reused.
 - Licenses: E5 is MIT, LFM2 uses the LFM Open License v1.0.
+
+## Production readiness
+
+This implementation is designed for local use. A production deployment requires
+the following changes.
+
+- **Persistence and process model.** Move the index into a store that survives
+  restarts, such as Postgres with pgvector or a dedicated vector database.
+  Running more than one process also requires a shared index and a shared model
+  service; today each process would load its own models and hold a separate
+  corpus.
+- **Ingestion and backpressure.** Parse and embed uploads in a background
+  worker with job status, rather than inside the request. Rate-limit uploads
+  and queries, cap concurrent jobs, and add timeouts; once the worker
+  threadpool is exhausted, requests wait.
+- **Security.** Add authentication and per-user document isolation. Isolate
+  PDF parsing in a sandbox, keep exception details in logs rather than API
+  responses, and serve over TLS behind a reverse proxy.
+- **Operations.** Emit structured logs and metrics for latency, failures, and
+  queue depth. Add a readiness check that verifies both models, and move model
+  IDs and limits into environment variables.
+- **Retrieval quality.** Establish a labeled evaluation set before tuning
+  chunking or models. Add hybrid keyword search and a reranker if dense
+  retrieval is insufficient, and include filenames in answer citations for
+  multi-document corpora.
+- **Input coverage.** Add OCR for scanned PDFs and layout-aware extraction for
+  multi-column documents.
+- **Supply chain and licensing.** Pin model revisions and dependency hashes,
+  and review the LFM Open License for the `/ask` layer.
