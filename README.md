@@ -106,7 +106,9 @@ curl -X POST http://127.0.0.1:8000/ask \
 
 <http://127.0.0.1:8000/> serves a two-pane interface over the same retrieval
 functions. The left pane uploads PDFs and lists the indexed documents, each with
-a Remove button. The right pane searches or asks questions. Before the first
+a Remove button. Files are uploaded one at a time with per-file progress, so a
+large batch does not leave the page waiting on one long request. The right pane
+searches or asks questions. Before the first
 document is indexed, the query controls are hidden and an upload prompt is
 displayed. Search is the default action. The answer model loads in the
 background at startup; if it is still loading when Ask is used, the page shows

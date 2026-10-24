@@ -45,6 +45,7 @@
       const input = form.querySelector("input[type=file]");
       const list = document.getElementById("selected-files");
       const submit = form.querySelector("button[type=submit]");
+      const status = document.getElementById("upload-status");
 
       const renderFiles = () => {
         list.replaceChildren(
@@ -58,12 +59,77 @@
       };
 
       input.addEventListener("change", renderFiles);
-      form.addEventListener("htmx:afterRequest", (event) => {
-        const status = event.detail.xhr.status;
-        if (status >= 200 && status < 300) {
-          form.reset();
-          renderFiles();
+
+      const refreshDocuments = () =>
+        htmx.ajax("GET", "/ui/documents", {
+          target: "#documents",
+          swap: "innerHTML",
+        });
+
+      // Upload one file per request. A single request for a large batch leaves
+      // the page on "indexing" for minutes with no feedback.
+      form.addEventListener("submit", async (event) => {
+        event.preventDefault();
+        const files = Array.from(input.files);
+        if (files.length === 0) {
+          return;
         }
+
+        const errors = [];
+        let indexed = 0;
+        const started = performance.now();
+        submit.textContent = "Uploading…";
+        submit.disabled = true;
+        input.disabled = true;
+
+        for (let index = 0; index < files.length; index += 1) {
+          const file = files[index];
+          status.textContent =
+            `Indexing ${index + 1} of ${files.length}: ${file.name}`;
+          const data = new FormData();
+          data.append("files", file);
+          try {
+            const response = await fetch("/ui/upload", {
+              method: "POST",
+              body: data,
+            });
+            if (response.ok) {
+              indexed += 1;
+              try {
+                await refreshDocuments();
+              } catch {
+                // The list refreshes on the next successful file.
+              }
+            } else {
+              const parsed = document.createElement("template");
+              parsed.innerHTML = await response.text();
+              const message = parsed.content.textContent.trim();
+              if (message) {
+                errors.push(message);
+              }
+            }
+          } catch (error) {
+            errors.push(`${file.name}: ${error.message}`);
+          }
+        }
+
+        const elapsed = ((performance.now() - started) / 1000).toFixed(1);
+        status.replaceChildren();
+        const summary = document.createElement("span");
+        summary.textContent =
+          `Indexed ${indexed} of ${files.length} files in ${elapsed}s.`;
+        status.append(summary);
+        for (const error of errors) {
+          const item = document.createElement("span");
+          item.className = "error";
+          item.textContent = ` ${error}`;
+          status.append(item);
+        }
+
+        form.reset();
+        input.disabled = false;
+        submit.textContent = "Upload";
+        renderFiles();
       });
 
       const queryForm = document.getElementById("query");
@@ -117,14 +183,11 @@
   <main class="panes">
     <aside class="library">
       <h2>Documents</h2>
-      <form id="upload-form" hx-post="/ui/upload" hx-target="#upload-status"
-            hx-swap="innerHTML" hx-encoding="multipart/form-data"
-            hx-indicator="#upload-spinner" hx-disabled-elt="find button">
+      <form id="upload-form">
         <input id="file-input" type="file" name="files" accept="application/pdf"
                multiple required aria-label="PDF files">
         <ul id="selected-files" class="file-list"></ul>
         <button type="submit" disabled>Upload</button>
-        <span id="upload-spinner" class="spinner">indexing…</span>
       </form>
       <div id="upload-status" aria-live="polite"></div>
       <div id="documents" hx-get="/ui/documents" hx-trigger="load"></div>
